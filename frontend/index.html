@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmbodiedRobotBrain - 具身智能机械臂控制</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #00d4ff;
+            --secondary: #0099cc;
+            --bg: #0a0e17;
+            --bg-card: #111827;
+            --text: #e0e6ed;
+            --text-muted: #6b7280;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+        
+        body {
+            font-family: 'Inter', 'PingFang SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            padding: 24px 40px;
+            border-bottom: 1px solid rgba(0,212,255,0.2);
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, var(--primary), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .header p { color: var(--text-muted); margin-top: 4px; font-size: 0.9rem; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        
+        .status-bar {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        
+        .status-item {
+            background: var(--bg-card);
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .camera-view {
+            background: #000;
+            border-radius: 12px;
+            aspect-ratio: 4/3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .camera-view canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .robot-state {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .joint-info {
+            background: rgba(0,0,0,0.3);
+            padding: 12px;
+            border-radius: 8px;
+        }
+        
+        .joint-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; }
+        .joint-value { font-size: 1.1rem; font-weight: 600; color: var(--primary); font-family: monospace; }
+        
+        .action-panel {
+            grid-column: 1 / -1;
+        }
+        
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .action-control {
+            background: rgba(0,0,0,0.3);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .action-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; }
+        .action-value { font-size: 1.4rem; font-weight: 700; color: var(--primary); font-family: monospace; }
+        
+        .gripper-btn {
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            border: none;
+            color: white;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: transform 0.2s;
+        }
+        
+        .gripper-btn:hover { transform: translateY(-2px); }
+        .gripper-btn.close { background: linear-gradient(135deg, #dc2626, #ef4444); }
+        
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            color: #000;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-card {
+            background: rgba(0,0,0,0.3);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .metric-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+        
+        .log-area {
+            background: #000;
+            border-radius: 8px;
+            padding: 12px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--success);
+        }
+        
+        .log-entry { margin-bottom: 4px; }
+        .log-entry.warn { color: var(--warning); }
+        .log-entry.error { color: var(--danger); }
+        
+        .trajectory-view {
+            height: 200px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .trajectory-canvas { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>🤖 EmbodiedRobotBrain</h1>
+            <p>具身智能工业协作机械臂控制系统 · Transformer + PPO 强化学习</p>
+        </div>
+        
+        <div class="container">
+            <!-- Status -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-dot" :style="{background: systemStatus === 'running' ? '#10b981' : '#ef4444'}"></div>
+                    <span>{{ systemStatus === 'running' ? '系统运行中' : '系统离线' }}</span>
+                </div>
+                <div class="status-item">
+                    <span>设备: {{ deviceInfo }}</span>
+                </div>
+                <div class="status-item">
+                    <span>策略版本: v1.0</span>
+                </div>
+            </div>
+            
+            <!-- Metrics -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">{{ successRate.toFixed(1) }}%</div>
+                        <div class="metric-label">抓取成功率</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ avgReward.toFixed(2) }}</div>
+                        <div class="metric-label">平均奖励</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ episodesCount }}</div>
+                        <div class="metric-label">训练回合</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ inferenceTime.toFixed(1) }}ms</div>
+                        <div class="metric-label">推理延迟</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Grid -->
+            <div class="grid">
+                <!-- Camera View -->
+                <div class="card">
+                    <div class="card-title">📷 视觉感知</div>
+                    <div class="camera-view">
+                        <canvas ref="cameraCanvas"></canvas>
+                        <div v-if="!hasCamera" style="position:absolute;">
+                            等待相机输入...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Robot State -->
+                <div class="card">
+                    <div class="card-title">🦾 机械臂状态</div>
+                    <div class="robot-state">
+                        <div class="joint-info" v-for="(val, i) in jointPositions" :key="i">
+                            <div class="joint-label">关节 {{ i + 1 }}</div>
+                            <div class="joint-value">{{ (val * 180 / Math.PI).toFixed(1) }}°</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">末端执行器位置</div>
+                        <div style="font-family: monospace; color: var(--primary);">
+                            X: {{ eePosition[0].toFixed(3) }} |
+                            Y: {{ eePosition[1].toFixed(3) }} |
+                            Z: {{ eePosition[2].toFixed(3) }}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">夹爪开度</div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                <div :style="{ width: (gripperWidth / 0.08 * 100) + '%', height: '100%', background: 'linear-gradient(90deg, var(--primary), var(--success))', transition: 'width 0.3s' }"></div>
+                            </div>
+                            <span style="font-family: monospace; color: var(--primary);">{{ (gripperWidth * 1000).toFixed(0) }}mm</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Panel -->
+                <div class="card action-panel">
+                    <div class="card-title">🎮 动作控制</div>
+                    
+                    <div class="action-grid">
+                        <div class="action-control">
+                            <div class="action-label">X轴位移</div>
+                            <div class="action-value">{{ (action[0] * 100).toFixed(1) }}cm</div>
+                        </div>
+                        <div class="action-control">
+                            <div class="action-label">Y轴位移</div>
+                            <div class="action-value">{{ (action[1] * 100).toFixed(1) }}cm</div>
+                        </div>
+                        <div class="action-control">
+                            <div class="action-label">Z轴位移</div>
+                            <div class="action-value">{{ (action[2] * 100).toFixed(1) }}cm</div>
+                        </div>
+                        <div class="action-control">
+                            <div class="action-label">夹爪命令</div>
+                            <div class="action-value" :style="{ color: action[3] > 0 ? 'var(--success)' : 'var(--danger)' }">
+                                {{ action[3] > 0 ? '张开' : '闭合' }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <button class="gripper-btn" @click="sendAction">🔮 AI推理</button>
+                        <button class="gripper-btn close" @click="gripperClose">✊ 闭合夹爪</button>
+                        <button class="gripper-btn" @click="gripperOpen">🖐️ 张开夹爪</button>
+                        <button class="btn" @click="resetEnvironment" style="background: rgba(255,255,255,0.1); color: white;">
+                            🔄 重置环境
+                        </button>
+                    </div>
+                    
+                    <!-- Trajectory -->
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">末端轨迹 (XY平面)</div>
+                        <div class="trajectory-view">
+                            <canvas ref="trajectoryCanvas" class="trajectory-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Training Log -->
+                <div class="card">
+                    <div class="card-title">📊 训练日志</div>
+                    <div class="log-area" ref="logArea">
+                        <div v-for="(log, i) in logs" :key="i" class="log-entry" :class="log.type">
+                            [{{ log.time }}] {{ log.msg }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const { createApp, ref, onMounted, nextTick } = Vue;
+        
+        createApp({
+            setup() {
+                const cameraCanvas = ref(null);
+                const trajectoryCanvas = ref(null);
+                const logArea = ref(null);
+                
+                const systemStatus = ref('offline');
+                const deviceInfo = ref('检测中...');
+                const hasCamera = ref(false);
+                
+                const jointPositions = ref([0, 0, 0, 0, 0, 0, 0]);
+                const eePosition = ref([0.5, 0, 0.2]);
+                const gripperWidth = ref(0.08);
+                
+                const action = ref([0, 0, 0, 1]);
+                const successRate = ref(0);
+                const avgReward = ref(0);
+                const episodesCount = ref(0);
+                const inferenceTime = ref(0);
+                
+                const logs = ref([]);
+                const trajectoryPoints = ref([]);
+                
+                const addLog = (msg, type = 'info') => {
+                    const now = new Date();
+                    const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                    logs.value.push({ time, msg, type });
+                    if (logs.value.length > 50) logs.value.shift();
+                    nextTick(() => {
+                        if (logArea.value) logArea.value.scrollTop = logArea.value.scrollHeight;
+                    });
+                };
+                
+                const sendAction = async () => {
+                    const start = performance.now();
+                    addLog('正在推理动作...', 'info');
+                    
+                    try {
+                        const response = await axios.post('http://localhost:8013/predict/action', {
+                            rgb_image: generateDummyRGB(),
+                            depth_image: generateDummyDepth(),
+                            robot_state: [...jointPositions.value, ...Array(7).fill(0)]
+                        });
+                        
+                        const data = response.data;
+                        action.value = data.action;
+                        inferenceTime.value = performance.now() - start;
+                        
+                        addLog(`动作: [${action.value.map(v => v.toFixed(2)).join(', ')}] 值: ${data.value.toFixed(3)}`);
+                        
+                    } catch (error) {
+                        addLog('推理失败: ' + error.message, 'error');
+                    }
+                };
+                
+                const gripperOpen = () => {
+                    action.value = [0, 0, 0, 1];
+                    gripperWidth.value = 0.08;
+                    addLog('夹爪张开', 'info');
+                };
+                
+                const gripperClose = () => {
+                    action.value = [0, 0, 0, -1];
+                    gripperWidth.value = 0.0;
+                    addLog('夹爪闭合', 'info');
+                };
+                
+                const resetEnvironment = () => {
+                    jointPositions.value = [0, 0, 0, 0, 0, 0, 0];
+                    gripperWidth.value = 0.08;
+                    trajectoryPoints.value = [];
+                    addLog('环境已重置', 'info');
+                    drawTrajectory();
+                };
+                
+                const generateDummyRGB = () => {
+                    const h = 224, w = 224;
+                    const arr = [];
+                    for (let i = 0; i < h; i++) {
+                        const row = [];
+                        for (let j = 0; j < w; j++) {
+                            row.push([Math.random() * 100 + 50, Math.random() * 50 + 100, Math.random() * 50 + 50]);
+                        }
+                        arr.push(row);
+                    }
+                    return arr;
+                };
+                
+                const generateDummyDepth = () => {
+                    const h = 224, w = 224;
+                    return Array(h).fill(0).map(() => Array(w).fill(0.5));
+                };
+                
+                const drawCamera = () => {
+                    if (!cameraCanvas.value) return;
+                    const ctx = cameraCanvas.value.getContext('2d');
+                    const w = 320, h = 240;
+                    cameraCanvas.value.width = w;
+                    cameraCanvas.value.height = h;
+                    
+                    // Simulate camera feed with gradient
+                    const gradient = ctx.createLinearGradient(0, 0, w, h);
+                    gradient.addColorStop(0, '#1a1a2e');
+                    gradient.addColorStop(1, '#16213e');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, w, h);
+                    
+                    // Add some "objects"
+                    for (let i = 0; i < 5; i++) {
+                        const x = Math.random() * w;
+                        const y = Math.random() * h;
+                        const r = Math.random() * 30 + 10;
+                        ctx.beginPath();
+                        ctx.arc(x, y, r, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(0, 212, 255, ${Math.random() * 0.3})`;
+                        ctx.fill();
+                    }
+                    
+                    ctx.fillStyle = '#888';
+                    ctx.font = '12px Inter';
+                    ctx.fillText('RGB Camera Feed (Simulated)', 10, 20);
+                };
+                
+                const drawTrajectory = () => {
+                    if (!trajectoryCanvas.value) return;
+                    const canvas = trajectoryCanvas.value;
+                    const ctx = canvas.getContext('2d');
+                    const w = canvas.width = canvas.offsetWidth;
+                    const h = canvas.height = canvas.offsetHeight;
+                    
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.fillRect(0, 0, w, h);
+                    
+                    // Grid
+                    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                    ctx.lineWidth = 1;
+                    for (let x = 0; x < w; x += 20) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, 0);
+                        ctx.lineTo(x, h);
+                        ctx.stroke();
+                    }
+                    for (let y = 0; y < h; y += 20) {
+                        ctx.beginPath();
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(w, y);
+                        ctx.stroke();
+                    }
+                    
+                    // Trajectory points
+                    const points = trajectoryPoints.value;
+                    if (points.length > 1) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = '#00d4ff';
+                        ctx.lineWidth = 2;
+                        for (let i = 0; i < points.length; i++) {
+                            const px = (points[i][0] / 1.0) * w;
+                            const py = (1 - points[i][1] / 0.5) * h;
+                            if (i === 0) ctx.moveTo(px, py);
+                            else ctx.lineTo(px, py);
+                        }
+                        ctx.stroke();
+                    }
+                    
+                    // Current position
+                    if (points.length > 0) {
+                        const last = points[points.length - 1];
+                        const px = (last[0] / 1.0) * w;
+                        const py = (1 - last[1] / 0.5) * h;
+                        ctx.beginPath();
+                        ctx.arc(px, py, 5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#10b981';
+                        ctx.fill();
+                    }
+                };
+                
+                const checkHealth = async () => {
+                    try {
+                        const resp = await axios.get('http://localhost:8013/health');
+                        systemStatus.value = resp.data.status === 'ok' ? 'running' : 'offline';
+                        deviceInfo.value = resp.data.device.includes('cuda') ? '✓ CUDA GPU' : 'CPU';
+                        addLog('系统连接成功', 'info');
+                    } catch (e) {
+                        systemStatus.value = 'offline';
+                        deviceInfo.value = '未连接';
+                        addLog('无法连接到后端服务', 'warn');
+                    }
+                };
+                
+                onMounted(() => {
+                    addLog('系统初始化...', 'info');
+                    checkHealth();
+                    
+                    setInterval(() => {
+                        drawCamera();
+                        drawTrajectory();
+                    }, 100);
+                    
+                    // Simulate joint movement
+                    setInterval(() => {
+                        jointPositions.value = jointPositions.value.map((v, i) => 
+                            v + (Math.random() - 0.5) * 0.01
+                        );
+                    }, 500);
+                    
+                    // Simulate EE movement based on action
+                    setInterval(() => {
+                        eePosition.value = [
+                            eePosition.value[0] + action.value[0] * 0.01,
+                            eePosition.value[1] + action.value[1] * 0.01,
+                            eePosition.value[2] + action.value[2] * 0.01
+                        ];
+                        trajectoryPoints.value.push([...eePosition.value]);
+                        if (trajectoryPoints.value.length > 100) trajectoryPoints.value.shift();
+                    }, 200);
+                });
+                
+                return {
+                    cameraCanvas, trajectoryCanvas, logArea,
+                    systemStatus, deviceInfo, hasCamera,
+                    jointPositions, eePosition, gripperWidth,
+                    action, successRate, avgReward, episodesCount, inferenceTime,
+                    logs, trajectoryPoints,
+                    sendAction, gripperOpen, gripperClose, resetEnvironment
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

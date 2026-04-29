@@ -1,0 +1,39 @@
+# Core
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Simulation
+pybullet>=3.2.5
+pybulletX>=0.1.0
+
+# RL
+gymnasium>=0.29.0
+stable-baselines3>=2.0.0
+tensorboard>=2.13.0
+
+# Vision
+opencv-python>=4.8.0
+pillow>=9.5.0
+transformers>=4.30.0
+timm>=0.9.0
+dins>=0.1.0  # For 6-DoF pose estimation
+
+# ROS2 (optional)
+rclpy>=3.3.0
+geometry_msgs>=4.0.0
+
+# Utils
+pyyaml>=6.0
+loguru>=0.7.0
+tqdm>=4.65.0
+matplotlib>=3.7.0
+
+# API
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# Training
+torch.optim.lr_scheduler
